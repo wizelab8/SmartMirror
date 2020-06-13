@@ -34,7 +34,7 @@ while True:
     img = cv2.resize(img,(100,100))
     img = np.reshape(img,[1,100,100,1])
 
-    classes = model.predict_classes(img)
+    classes = model.predict(img)
     print(classes)
     if classes==0:
         cv2.rectangle(frame, (x,y), (x+w,y+h), (100,100,255), 4)

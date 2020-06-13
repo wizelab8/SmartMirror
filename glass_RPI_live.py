@@ -32,23 +32,17 @@ while True:
 
     # Display the resulting frame
     
-    cv2.imshow('Video', frame)
+    cv2.imshow('Frame', frame)
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
     if cv2.waitKey(1) & 0xFF == ord('c') or len(faces)==1 and y-h/5>0:
-		
         crop_img = crop[y-h//5: y + h, x: x + w] # Crop from x, y, w, h -> 100, 200, 300, 400
         cv2.imwrite("face.jpg", crop_img)
         
         break
         
-
-video_capture.release()
-cv2.destroyAllWindows()
-
-time.sleep(3)
 
 
 model = load_model('models/facial_feature_model.h5')
@@ -61,21 +55,29 @@ img = cv2.imread('face.jpg')
 img = cv2.resize(img,(200,200))
 img = np.reshape(img,[1,200,200,3])
 
-classes = model.predict_classes(img)
+classes = model.predict(img)
 
 print(classes)
+dict_glasses={}
+glass_no=0
+for i in classes[0]:
+	dict_glasses[str(glass_no)]=i
+	glass_no+=1
+print("dict",dict_glasses)
+glass_no=0
+dict_glasses={k: v for k, v in sorted(dict_glasses.items(), key=lambda item: item[1],reverse=True)}
+list_glasses=list(dict_glasses.keys())
+print(list_glasses)
+print("GLASS Number: "+str(list_glasses[glass_no]))
 
-image_file='face.jpg'
-glass_no=classes[0]+1
-
-print("GLASS Number: "+str(glass_no))
-
-rows = video_capture.get(3)
-cols = video_capture.get(4) # float
+rows = video_capture.get(4)
+cols = video_capture.get(3) # float
 print(rows)
 print(cols)
-x,y=int(rows/2),int(cols/2)
-w,h=100,100
+
+w,h=75,75
+y,x=int(rows/2),int(cols-2*w)
+print("x:",x," y:",y)
 thumb_model = load_model('models/thumb_model.h5')
 
 thumb_model.compile(loss='binary_crossentropy',
@@ -93,16 +95,18 @@ predictor = dlib.shape_predictor("models/shape_predictor_5_face_landmarks.dat")
 # initialize the video stream and sleep for a bit, allowing the
 # camera sensor to warm up
 print("[INFO] camera sensor warming up...")
-vs = VideoStream(src=0).start()
+
 #vs = VideoStream(usePiCamera=True).start() # Raspberry Pi
-time.sleep(1)
+
 
 #--------
 GLASS_DIR="clothing_accessories/glass_frames/"
-nose_image = cv2.imread(GLASS_DIR+str(glass_no)+".png")
+print(GLASS_DIR+str(list_glasses[glass_no])+".png")
+nose_image = cv2.imread(GLASS_DIR+str(list_glasses[glass_no])+".png")
 nose_image.setflags(write=1)
-frame = vs.read()
+ret, frame  = video_capture.read()
 rows, cols, _ = frame.shape
+print(frame.shape)
 nose_mask = np.zeros((rows, cols), np.uint8)
 face_img = np.zeros((rows, cols), np.uint8);
 #---------
@@ -112,7 +116,7 @@ while True:
 	# grab the frame from the threaded video stream, resize it to
 	# have a maximum width of 400 pixels, and convert it to
 	# grayscale
-	frame = vs.read()
+	ret, frame  = video_capture.read()
 	frame_dup=frame.copy()
 	
 	frame = imutils.resize(frame, width=WINDOW_WIDTH)
@@ -156,6 +160,7 @@ while True:
 			bottom_right = (int(center_nose[0] + nose_width/2),
 						   int(center_nose[1] + nose_height/2))
 
+
 			# Adding the new nose
 			nose_pig = cv2.resize(nose_image,(nose_width, nose_height))
 			nose_pig_gray = cv2.cvtColor(nose_pig, cv2.COLOR_BGR2GRAY)
@@ -171,20 +176,20 @@ while True:
 	
 
 	cv2.rectangle(frame, (x,y), (x+w,y+h), (255,0,0), 1)     
-	thumb_img=frame[y:y+h,x:x+w]
+	thumb_img=frame[y:y+w,x:x+h]
+	cv2.imshow("thumb",thumb_img)
 	thumb_img = cv2.cvtColor(thumb_img, cv2.COLOR_BGR2GRAY)
 	thumb_img = cv2.resize(thumb_img,(100,100))
 	thumb_img = np.reshape(thumb_img,[1,100,100,1])
 	classes = thumb_model.predict_classes(thumb_img)
-	print(classes)
 	if classes==0:
         	cv2.rectangle(frame, (x,y), (x+w,y+h), (100,100,255), 4)
         	now = datetime.now()
         	current_time = now.strftime("%H:%M:%S")
-        	cv2.imwrite("data/train/"+str(glass_no)+"/"+str(current_time)+".png", face_img)
+        	cv2.imwrite("data/train/"+str(list_glasses[glass_no])+"/"+str(current_time)+".png", face_img)
         	flag+=1
-        	glass_no=1+(flag%4)
-        	nose_image = cv2.imread(GLASS_DIR+str(glass_no)+".png")
+        	glass_no=(flag%len(list_glasses))
+        	nose_image = cv2.imread(GLASS_DIR+str(list_glasses[glass_no])+".png")
         	nose_image.setflags(write=1)
         	rows, cols, _ = frame.shape
         	nose_mask = np.zeros((rows, cols), np.uint8)
@@ -223,8 +228,8 @@ while True:
 			cv2.circle(frame, (int(xx), int(yy)), int(radius),(0, 255, 255), 2)
 			cv2.circle(frame, center, 5, (0, 0, 255), -1)
 			flag+=1
-			glass_no=1+(flag%4)
-			nose_image = cv2.imread(GLASS_DIR+str(glass_no)+".png")
+			glass_no=(flag%len(list_glasses))
+			nose_image = cv2.imread(GLASS_DIR+str(list_glasses[glass_no])+".png")
 			nose_image.setflags(write=1)
 			rows, cols, _ = frame.shape
 			nose_mask = np.zeros((rows, cols), np.uint8)
@@ -240,4 +245,4 @@ while True:
 
 # do a bit of cleanup
 cv2.destroyAllWindows()
-vs.stop()
+video_capture.stop()
